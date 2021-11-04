@@ -1,0 +1,35 @@
+:PROPERTIES:
+:ID:       d1e1b4ce-3da9-455b-8bd0-f77b55bf777d
+:END:
+#+title:     PobeSob
+#+author:    Roch D'Amour
+#+email:     roch.damour@gmail.com
+
+* Introduction
+** Mise en contexte
+*** Définitions
+
+| Mot           | Définition                                                  |
+|---------------+-------------------------------------------------------------|
+| SD            | Système distribuée                                          |
+| Disponibilité | Temps ou le système est accessible *et* fonctionnel         |
+| Synchrone     | Une opération qui est bloquante au niveau d'un système.     |
+| Asynchrone    | Une opération qui n'est pas bloquante au niveau du système. |
+
+*** On doit mettre en place un système qui communique rapidement
+Imagions un système qui doit communiquer de l'information rapidement...
+Par exemple, une maison intelligente.
+
+Pour une maison intelligente, on a besoin de:
+- Des capteurs (Température, humidité, lumière, heure, mouvements)
+- Des moteurs (Consomme les données produites par les capteurs et réagissent en
+  conséquence)
+- *_On assume que les moteurs sont intelligents et n'ont pas besoin d'une entité centrale pour les administrer._*
+
+#+ATTR_ORG: :width 600
+[[./images/Devices-sans-intéractions.png][Topologie du système]]
+
+*** Un problème de communication
+Rapidement, on constate que le système
+
+** Un système Pub/Sub, c'est quoi?
