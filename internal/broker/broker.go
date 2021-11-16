@@ -8,6 +8,7 @@ import (
 	"github.com/notarock/pobesob/internal/topic"
 )
 
+
 type Broker struct {
 	topics []topic.Topic
 }

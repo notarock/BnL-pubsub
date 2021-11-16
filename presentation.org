@@ -1,35 +1,160 @@
-:PROPERTIES:
-:ID:       d1e1b4ce-3da9-455b-8bd0-f77b55bf777d
-:END:
 #+title:     PobeSob
 #+author:    Roch D'Amour
 #+email:     roch.damour@gmail.com
 
-* Introduction
-** Mise en contexte
-*** Définitions
+* Mise en contexte
+** Définitions
 
 | Mot           | Définition                                                  |
 |---------------+-------------------------------------------------------------|
 | SD            | Système distribuée                                          |
-| Disponibilité | Temps ou le système est accessible *et* fonctionnel         |
+| Disponibilité | Temps ou le système est accessible *et* fonctionnel           |
 | Synchrone     | Une opération qui est bloquante au niveau d'un système.     |
 | Asynchrone    | Une opération qui n'est pas bloquante au niveau du système. |
 
-*** On doit mettre en place un système qui communique rapidement
-Imagions un système qui doit communiquer de l'information rapidement...
+** On doit mettre en place un système IoT typique...
+Imagions un système qui doit communiquer de l'information rapidement.
 Par exemple, une maison intelligente.
 
-Pour une maison intelligente, on a besoin de:
-- Des capteurs (Température, humidité, lumière, heure, mouvements)
-- Des moteurs (Consomme les données produites par les capteurs et réagissent en
-  conséquence)
-- *_On assume que les moteurs sont intelligents et n'ont pas besoin d'une entité centrale pour les administrer._*
+Pour bâtir un système de maison intelligent, on a besoin de plusieurs choses:
+ * Capteurs
+ * Moteurs
+
+_(On assume que les moteurs sont intelligents et n'ont pas besoin d'une entité centrale pour les administrer.)_
 
 #+ATTR_ORG: :width 600
 [[./images/Devices-sans-intéractions.png][Topologie du système]]
 
-*** Un problème de communication
-Rapidement, on constate que le système
+- Device jaune: Capteurs
+- Device bleu: Moteurs
 
-** Un système Pub/Sub, c'est quoi?
+** Problèmes
+*** L'implémentation naive
+Pour que le système fonctionne, nous avons besoin de passer l'information depuis les capteurs jusqu'au moteurs.
+
+Solution: Chaques capteurs communiques avec tous les moteurs
+
+À première vue, cela semble simple:
+#+ATTR_ORG: :width 600
+[[./images/communication-1-device.png][Communication d'un capteur]]
+
+Par contre, on remarque rapidement que cette implémentation cause un grand
+nombre de message dans notre réseau.
+#+ATTR_ORG: :width 600
+[[./images/communication-trop-de-devices.png][Communication de tous les capteurs]]
+
+*** Il faut savoir avec qui on communique
+Pour qu'une implémentation naive fonctionne, chaques capteurs doit connaitre
+l'emplacement de chaques moteurs afin d'y faire parvenir l'information nécessaire.
+
+Bon, cela demande un peu de configuration supplémentaire au début, mais ça
+devrait être correct... Right?
+
+On peut toujours utiliser les variables d'environments
+#+begin_src go
+hosts := string.Split(",", os.Getenv("HOSTS"))
+#+end_src
+
+#+ATTR_ORG: :width 600
+[[./images/communication-new-node.png][Par contre, si on ajoute un moteur...]]
+
+On doit redéployer tous les capteurs avec la nouvelle variable d'environment
+afin d'indiquer que le système comporte maintenant 4 moteurs.
+
+Le capteur doit absolument connaitre les récepteurs de ces messages...
+
+Ou peut-être pas?
+
+* Un système Pub/Sub, c'est quoi?
+** Générale
+Un système Pub/Sub est un système de communication à sense unique.
+
+On y retrouve des **producteurs** de données (Capteurs, _Publishers_) ainsi que des
+*consommateurs* (moteurs, _Subscribers_).
+
+Les _Publishers_ et _Subscribers_ communiquent au moyens de _Topics_ vers lequel ils vont soit _publier_ de l'information, ou _écouter_ l'information envoyé vers ces topics.
+
+C'est un type de communication "**One-to-many**" car une publication envoyé vers un _topic_
+va atteindre un ou plusieurs subscribers, dépendant du nombre inscrit sur ce topic.
+
+Le changement d'abonnement est dynamique. Pour modifier la topologie de notre système,
+il n'est pas nécessaire de déployer de nouvelles configurations.
+
+#+ATTR_ORG: :width 1000
+[[./images/exemple-mqtt.png][Exemple MQTT]]
+
+** L'entité principale: Le *Broker*
+Le **Broker** est la pièce centrale dans un système Pub/Sub.
+
+ C'est lui qui manipule les _Topics_
+   - Crée des _topics_ dans son régistre lorsqu'un _Publisher_ fait un **advertise**.
+   - Associe un _Subscriber_ à un Topic lorsqu'il fait un **subscribe**
+   - Redirige les messages publiés sur un _topic_ à tout ces destinataires
+
+Exemples de struct d'un Broker
+#+begin_src go
+type Topic struct type Topic struct {
+    topicName string
+    publishers []net.Conn
+    subscribers []net.Conn
+}
+type Topics []Topic
+
+type Broker struct {
+    topics Topics;
+}
+#+end_src
+
+Le broker doit être constamment être à l'écoute des nouvelle connections entrante.
+Pour ce faire, on peut ouvrir deux ports: Un pour pour les subscribers, un pour les publishers.
+
+Mais Avant d'entrer dans l'implémentation, on doit parler du moyen de communication...
+
+#+begin_src go
+func ListenPub(port string){
+    l, _ := net.Listen("tcp", "localhost:"+port)
+    defer l.Close()
+
+    for {
+        c, _ := l.Accept()
+        go handlePub(c)
+    }
+}
+
+func handlePub() {
+}
+
+#+end_src
+
+** Les type de messages
+La communication se fait typiquement par l'entremise de Socket.
+
+On y passe alors soit une struct sérializable, ou bien des strings que nous
+pouvons déconstruire et comprendre de bout à bout. Dans notre cas, on va
+utiliser une struct et assumer qu'elle est sérializé lors de la transmissions au
+travers nos socket.
+
+Il y a plusieurs type de message possible. Les voici:
+ - Advertise: Un publisher indique un nom de _topic_ sur lequel il diffusera des données.
+ - Undavertise: Un publisher indique qu'il ne diffusera plus de donnée sur le topic.
+ - Publish: Un publisher publie des données sur le topic. Le broker rediffuse ce message à tous les Subscribers inscrit au topic sur lequel la publication a été envoyé.
+ - Subscribe: Un subscriber indique qu'il souhaite recevoir les messages envoyé sur ce topic.
+ - Unsubscribe: Un subscriber indique qu'il ne souhaite plus recevoir les messages d'un topic.
+
+#+begin_src go
+type MessageType int
+const (
+	Publish MessageType = iota + 1
+	Advertise
+	Undavertise
+	Subscribe
+	Unsubscribe
+)
+
+type Message struct {
+	type MessageType
+	topic string
+	content string
+}
+
+#+end_src
