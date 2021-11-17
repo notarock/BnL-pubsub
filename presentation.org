@@ -1,4 +1,4 @@
-#+title:     PobeSob
+#+title:     Comment implémenter du Pub/Sub
 #+author:    Roch D'Amour
 #+email:     roch.damour@gmail.com
 
