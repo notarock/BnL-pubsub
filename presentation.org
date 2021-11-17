@@ -2,16 +2,11 @@
 #+author:    Roch D'Amour
 #+email:     roch.damour@gmail.com
 
-* Mise en contexte
-** Définitions
-
-| Mot           | Définition                                                  |
-|---------------+-------------------------------------------------------------|
-| SD            | Système distribuée                                          |
-| Disponibilité | Temps ou le système est accessible *et* fonctionnel           |
-| Synchrone     | Une opération qui est bloquante au niveau d'un système.     |
-| Asynchrone    | Une opération qui n'est pas bloquante au niveau du système. |
-
+* Introduction
+** Avant propos
+- Pseudocode
+- Hésiter pas pour les questions
+- Enjoy
 ** On doit mettre en place un système IoT typique...
 Imagions un système qui doit communiquer de l'information rapidement.
 Par exemple, une maison intelligente.
@@ -20,7 +15,8 @@ Pour bâtir un système de maison intelligent, on a besoin de plusieurs choses:
  * Capteurs
  * Moteurs
 
-_(On assume que les moteurs sont intelligents et n'ont pas besoin d'une entité centrale pour les administrer.)_
+_(On assume que les moteurs sont intelligents et n'ont pas besoin d'une entité
+centrale pour les administrer.)_
 
 #+ATTR_ORG: :width 600
 [[./images/Devices-sans-intéractions.png][Topologie du système]]
@@ -30,7 +26,8 @@ _(On assume que les moteurs sont intelligents et n'ont pas besoin d'une entité 
 
 ** Problèmes
 *** L'implémentation naive
-Pour que le système fonctionne, nous avons besoin de passer l'information depuis les capteurs jusqu'au moteurs.
+Pour que le système fonctionne, nous avons besoin de passer l'information depuis
+les capteurs jusqu'au moteurs.
 
 Solution: Chaques capteurs communiques avec tous les moteurs
 
@@ -66,23 +63,26 @@ Le capteur doit absolument connaitre les récepteurs de ces messages...
 Ou peut-être pas?
 
 * Un système Pub/Sub, c'est quoi?
-** Générale
 Un système Pub/Sub est un système de communication à sense unique.
 
 On y retrouve des **producteurs** de données (Capteurs, _Publishers_) ainsi que des
 *consommateurs* (moteurs, _Subscribers_).
 
-Les _Publishers_ et _Subscribers_ communiquent au moyens de _Topics_ vers lequel ils vont soit _publier_ de l'information, ou _écouter_ l'information envoyé vers ces topics.
+Les _Publishers_ et _Subscribers_ communiquent au moyens de _Topics_ vers lequel ils
+vont soit _publier_ de l'information, ou _écouter_ l'information envoyé vers ces
+topics.
 
-C'est un type de communication "**One-to-many**" car une publication envoyé vers un _topic_
-va atteindre un ou plusieurs subscribers, dépendant du nombre inscrit sur ce topic.
+C'est un type de communication "**One-to-many**" car une publication envoyé vers
+un _topic_ va atteindre un ou plusieurs subscribers, dépendant du nombre inscrit
+sur ce topic.
 
-Le changement d'abonnement est dynamique. Pour modifier la topologie de notre système,
-il n'est pas nécessaire de déployer de nouvelles configurations.
+Le changement d'abonnement est dynamique. Pour modifier la topologie de notre
+système, il n'est pas nécessaire de déployer de nouvelles configurations.
 
 #+ATTR_ORG: :width 1000
 [[./images/exemple-mqtt.png][Exemple MQTT]]
 
+* Implémentation
 ** L'entité principale: Le *Broker*
 Le **Broker** est la pièce centrale dans un système Pub/Sub.
 
@@ -110,20 +110,20 @@ Pour ce faire, on peut ouvrir deux ports: Un pour pour les subscribers, un pour 
 
 Mais Avant d'entrer dans l'implémentation, on doit parler du moyen de communication...
 
+Communication par socket:
+
 #+begin_src go
-func ListenPub(port string){
+func (b Broker) Listen(port string){
     l, _ := net.Listen("tcp", "localhost:"+port)
     defer l.Close()
 
     for {
         c, _ := l.Accept()
-        go handlePub(c)
+        go b.handleConnection(c)
     }
 }
 
-func handlePub() {
-}
-
+b.listen()
 #+end_src
 
 ** Les type de messages
@@ -144,17 +144,168 @@ Il y a plusieurs type de message possible. Les voici:
 #+begin_src go
 type MessageType int
 const (
-	Publish MessageType = iota + 1
-	Advertise
-	Undavertise
-	Subscribe
-	Unsubscribe
+    Publish MessageType = iota + 1
+    Advertise
+    Undavertise
+    Subscribe
+    Unsubscribe
 )
 
 type Message struct {
-	type MessageType
-	topic string
-	content string
+    type MessageType
+    topic string
+    content string
+}
+#+end_src
+
+C'est important d'avoir un moyen d'indiquer le type de message facilement lors
+de la communication, car cela influence l'action prise par le broker.
+
+Dispatch les messages vers l'action selon le type
+
+#+begin_src go
+
+func (b Broker) handleConnection(c net.Conn){
+    for {
+        var m Message;
+        message = c.read()
+        b.handleMessage(c, message)
+    }
 }
 
+func (b Broker) handleMessage(c net.Conn, m Message){
+    switch m.Type:
+    case Publish:
+        b.topics.publish(m)
+        break;
+    case Advertise:
+        b.topics.advertise(m)
+        break;
+    case Undavertise:
+        b.topics.unadvertise(m)
+        break;
+    case Subscribe:
+        b.topics.subscribe(m, c)
+        break;
+    case Unsubscribe:
+        b.topics.unsubscribe(m, c)
+        break;
+}
+
+#+end_src
+
+** Gestion des topics au niveau du broker
+
+La plus grosse tâche du broker c'est vraiment la gestion des topics et des
+connections associés.
+
+Pour être capable de communiquer facilement à tous les subscribers associés à un
+topic, on veut conserver une liste des connections actives associé à ces topics.
+
+#+begin_src go
+type Topic struct type Topic struct {
+    TopicName string
+    Publishers []net.Conn
+    Subscribers []net.Conn
+}
+
+type Topics []Topic
+
+#+end_src
+
+On peut se simplifier la tâche en ajoutant des fonctions à notre struct **Topics**
+pour faire ces actions
+
+#+begin_src go
+
+func (t Topics) Subscribe(m Message, c net.Conn){
+    topic := t.get("topic inscrit dans le message")
+	   topic.Subscribers = append(topic.Subscribers, c)
+}
+
+func (t Topics) Unsubscribe(m Message, c net.Conn){
+    topic := t.remove("topic inscrit dans le message")
+}
+
+func (t Topics) Advertise(m Message, c net.Conn){
+    topic := t.get("topic inscrit dans le message")
+	   topic.Publishers = append(topic.Publishers, c)
+}
+
+func (t Topics) Unadvertise(m Message, c net.Conn){
+    topic := t.remove("topic inscrit dans le message")
+}
+#+end_src
+
+Maintenant qu'on a ça de fait, il reste juste à publisher sur les topics
+correspondant:
+
+Un refresh:
+
+#+begin_src go
+type Message struct {
+    type MessageType
+    topic string
+    content string
+}
+#+end_src
+
+Envoie du message aux destinataires
+
+#+begin_src go :packages ("fmt")
+func (t Topics) Publish(m Message){
+    topic := t.get("topic inscrit dans le message")
+    t.Publish(m)
+}
+
+func (t Topic) Publish(m Message){
+    connections := t.Subscribers
+    // Il faut probablement sérialiser notre message avant de l'envoyer sur la connection.
+    // Puisque c'est un pseudocode, je ne vais pas embarquer dans ça.
+    bytes := m.serialize()
+    for _, connection := range connections {
+        connection.write(bytes)
+    }
+}
+#+end_src
+
+** Connection au broker
+
+Un des plus grand avantage du système Pub/Sub c'est qu'on a seulement besoin de
+se connection à une entité pour communiquer au travers le système entier.
+
+Dans notre système, on va avoir deux type de clients: _Publisher_, et _Subscribers_.
+
+Les deux vont initier *une* unique connection avec _broker_.
+
+#+begin_src go
+conn, _ := net.Dial("tcp", "broker.com:7777")
+#+end_src
+
+La différence ici, c'est que nous allons avoir deux fils d'exécution.
+
+Nous voulons être en mesure d'envoyer des commandes sur notre connection (Par
+exemple, un message de type _Subscribe_ ou bien _Advertise_) mais tous de même être
+à l'écoute de ce qui est envoyé sur la connection.
+
+#+begin_src go
+func (c net.Conn) Listen() {
+    for {
+        // Opération bloquante: Attend le prochain message
+        message := c.read()
+        // Traitement du message dans une goroutine pour ne pas bloquer
+        go handleMessage(message)
+    }
+}
+
+func (c net.Conn) Interact() {
+    message := readMessageFromCLI()
+    HandleSendMessage(message)
+}
+
+func Main() {
+    conn, _ := net.Dial("tcp", "broker.com:7777")
+    go conn.Listen()
+    conn.Interact()
+}
 #+end_src
