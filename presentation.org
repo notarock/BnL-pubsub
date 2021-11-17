@@ -309,3 +309,22 @@ func Main() {
     conn.Interact()
 }
 #+end_src
+
+Évidament, cet exemple de code simple montre seulement comment initier la
+connection, sans effectuer d'actions supplémentaires.
+
+Si on revient à notre exemple des capteurs et moteurs, les capteurs, lorsque mis
+en marche, se connectent à notre _broker_ et _Advertise_ les topics désiré.
+
+Même chose pour les moteurs: Une fois mise en marche, ils se connectent au
+_broker_ et _Subscribe_ sur les topics désiré.
+
+* Conclusion
+** Utiliser un protocole PUB/SUB déjà implémenter
+      * MQTT
+      * RabbitMQ
+** Stream processing
+map/reduce par dessu pub/sub
+
+** Mention honorable: Apache Kafka
+ Merci !
