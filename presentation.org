@@ -93,7 +93,7 @@ Le **Broker** est la pièce centrale dans un système Pub/Sub.
 
 Exemples de struct d'un Broker
 #+begin_src go
-type Topic struct type Topic struct {
+type Topic struct {
     topicName string
     publishers []net.Conn
     subscribers []net.Conn
@@ -106,7 +106,7 @@ type Broker struct {
 #+end_src
 
 Le broker doit être constamment être à l'écoute des nouvelle connections entrante.
-Pour ce faire, on peut ouvrir deux ports: Un pour pour les subscribers, un pour les publishers.
+Pour ce faire, on peut ouvrir un port.
 
 Mais Avant d'entrer dans l'implémentation, on doit parler du moyen de communication...
 
@@ -324,7 +324,7 @@ _broker_ et _Subscribe_ sur les topics désiré.
       * MQTT
       * RabbitMQ
 ** Stream processing
-map/reduce par dessu pub/sub
+- map/reduce par dessu pub/sub
 
 ** Mention honorable: Apache Kafka
  Merci !
